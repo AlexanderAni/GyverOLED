@@ -436,6 +436,7 @@ public:
         } else {
             if (!_buf_flag) {
                 setWindow(x, y>>3, _maxX, _maxRow);
+                setCursorXY(x, y);
                 beginData();			
                 sendByte(1 << (y & 0b111));	// задвигаем 1 на высоту y
                 endTransm();
@@ -498,11 +499,21 @@ public:
                 return;
             }
             byte data = 0b1 << (y & 0b111);
-            y >>= 3;			
-            setWindow(x0, y, x1, y);
-            beginData();
-            for (int x = x0; x < x1; x++) writeData(data, y, x);
-            endTransm();
+            if (_TYPE < 2) {
+                y >>= 3;
+                setWindow(x0, y, x1, y);
+                beginData();
+                for (int x = x0; x < x1; x++) writeData(data, y, x);
+                endTransm();
+
+            } else {
+                setCursorXY(x0, y);
+                y >>= 3;
+                beginData();
+                for (int x = x0; x < x1; x++) writeData(data, y, x);
+                endTransm();
+
+            }
         }			
     }
     
@@ -532,18 +543,54 @@ public:
             y0 >>= 3;
             y1 = (y1 - 1) >> 3;
             byte numBytes = y1 - y0;
-            setWindow(x, y0, x, y1);
-            
-            beginData();
-            if (numBytes == 0) {			
-                if (_inRange(y0, 0, _maxRow)) writeData( (fill >> (8-height)) << shift, y0, x );
+            if (_TYPE == 2) { // SSH1106
+                if (numBytes == 0) {
+                    if (_inRange(y0, 0, _maxRow)) {
+                        setCursorXY(x, y0 * 8);
+                        beginData();
+                        sendByte((fill >> (8-height)) << shift);
+                        endTransm();
+                        }
+                } else {
+                    if (_inRange(y0, 0, _maxRow)) {
+                        setCursorXY(x, y0 * 8);
+                        beginData();
+                        sendByte(fill << shift);                                      // начальный кусок
+                        endTransm();
+                    }
+                    y0++;
+                    for (byte i = 0; i < numBytes - 1; i++, y0++) {
+                        if (_inRange(y0, 0, _maxRow)) {
+                            // столбик
+                            setCursorXY(x, y0 * 8);
+                            beginData();
+                            sendByte(fill);
+                            endTransm();
+                        }
+                    }
+                    if (_inRange(y0, 0, _maxRow)) {
+                        setCursorXY(x, y0 * 8);
+                        beginData();
+                        sendByte(fill >> shift2);                                     // нижний кусок
+                        endTransm();
+                    }
+                }
             } else {
-                if (_inRange(y0, 0, _maxRow)) writeData(fill << shift, y0, x);										// начальный кусок
-                y0++;
-                for (byte i = 0; i < numBytes - 1; i++, y0++) if (_inRange(y0, 0, _maxRow)) writeData(fill, y0, x);	// столбик
-                if (_inRange(y0, 0, _maxRow)) writeData(fill >> shift2, y0, x);										// нижний кусок			
+                setWindow(x, y0, x, y1);
+                beginData();
+                if (numBytes == 0) {
+                    if (_inRange(y0, 0, _maxRow)) writeData( (fill >> (8-height)) << shift, y0, x );
+                } else {
+                    if (_inRange(y0, 0, _maxRow)) writeData(fill << shift, y0, x);										// начальный кусок
+                    y0++;
+                    for (byte i = 0; i < numBytes - 1; i++, y0++) if (_inRange(y0, 0, _maxRow)) {
+                        // столбик
+                        writeData(fill, y0, x);
+                    }
+                    if (_inRange(y0, 0, _maxRow)) writeData(fill >> shift2, y0, x);										// нижний кусок
+                }
+                endTransm();
             }
-            endTransm();
 
         }
     }
