@@ -773,7 +773,7 @@ public:
     // шлёт байт в "столбик" setCursor() и setCursorXY()
     void drawByte(uint8_t data) {
         if (++_x > _maxX) return;
-        if (_TYPE < 2 || 1) {							// для SSD1306
+        if (_TYPE < 2 || _shift == 0) {							// для SSD1306
             if (!_BUFF) beginData();
             if (_shift == 0) {							// если вывод без сдвига на строку
                 writeData(data);						// выводим
@@ -783,7 +783,19 @@ public:
             }
             if (!_BUFF) endTransm();		
         } else {
-            // для SSH1106
+            // для SSH1106 со сдвигом по вертикали
+            if (!_BUFF) {
+                setWindowAddress(_x, _y);
+                beginData();
+            }
+            writeData(data << _shift);                       // верхняя часть
+            if (!_BUFF) {
+                endTransm();
+                setWindowAddress(_x, _y + 8);
+                beginData();
+            }
+            writeData(data >> (8 - _shift));                 // нижняя часть
+            if (!_BUFF) endTransm();
             /*			
             int h = y & 0x07;			
             if (_BUFF) {
